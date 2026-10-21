@@ -3,6 +3,10 @@ $SHIM_PATH = "C:\Users\kylek\Source\mpc-hc-shim"
 $SOURCE_FILE = Join-Path $SHIM_PATH "mpc_hc_shim.cpp"
 $OUTPUT_EXE = Join-Path $SHIM_PATH "mpc-hc64.exe"
 
+$TARGET_DIR = "C:\Program Files (x86)\K-Lite Codec Pack\MPC-HC64"
+$TARGET_ORIG = Join-Path $TARGET_DIR "mpc-hc64_orig.exe"
+$TARGET_EXE = Join-Path $TARGET_DIR "mpc-hc64.exe"
+
 if (-not (Test-Path $VS_PATH)) {
     Write-Host "ERROR: vcvarsall.bat not found at $VS_PATH" -ForegroundColor Red
     Pause
@@ -10,8 +14,6 @@ if (-not (Test-Path $VS_PATH)) {
 }
 
 Write-Host "Initializing Visual Studio Environment..."
-# We call vcvarsall.bat and then run cl.exe in the same process context
-# Using 'cmd /c' ensures the environment variables from vcvarsall.bat are inherited.
 $compileCmd = "call `"$VS_PATH`" x86 && cl `"$SOURCE_FILE`" /Fe:`"$OUTPUT_EXE`" shell32.lib user32.lib"
 
 Write-Host "Compiling shim..."
@@ -20,17 +22,21 @@ $process = Start-Process cmd -ArgumentList "/c", $compileCmd -NoNewWindow -Wait 
 if ($process.ExitCode -eq 0) {
     Write-Host "Compilation successful." -ForegroundColor Green
         
-    $TARGET_PATH = "C:\Program Files (x86)\K-Lite Codec Pack\MPC-HC64\"
-    $OUTPUT_EXE = "C:\Users\kylek\Source\mpc-hc-shim\mpc-hc64.exe"
-
     if (Test-Path $OUTPUT_EXE) {
-        Write-Host "Copying executable to target folder..."
+        Write-Host "Deploying to target folder..."
         try {
-            Copy-Item -Path $OUTPUT_EXE -Destination $TARGET_PATH -Force -ErrorAction Stop
+            # Step 1: Backup original executable if mpc-hc64_orig.exe doesn't exist yet
+            if ((Test-Path $TARGET_EXE) -and (-not (Test-Path $TARGET_ORIG))) {
+                Write-Host "Backing up original mpc-hc64.exe to mpc-hc64_orig.exe..." -ForegroundColor Cyan
+                Move-Item -Path $TARGET_EXE -Destination $TARGET_ORIG -Force -ErrorAction Stop
+            }
+
+            # Step 2: Copy shim binary to target folder as mpc-hc64.exe
+            Copy-Item -Path $OUTPUT_EXE -Destination $TARGET_DIR -Force -ErrorAction Stop
             Write-Host "Deployment successful!" -ForegroundColor Green
         } catch {
-            Write-Host "Error copying file: $($_.Exception.Message)" -ForegroundColor Red
-            Write-Host "Note: You may need to run this script as Administrator to overwrite files in Program Files." -ForegroundColor Yellow
+            Write-Host "Error deploying file: $($_.Exception.Message)" -ForegroundColor Red
+            Write-Host "Note: You may need to run this script as Administrator to write to Program Files." -ForegroundColor Yellow
         }
     } else {
         Write-Host "Error: Output EXE was not created." -ForegroundColor Red
